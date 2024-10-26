@@ -1,5 +1,4 @@
 from math import *
-from fractions import Fraction
 import random
 
 import numpy as np
@@ -34,14 +33,13 @@ class QuantumCircuitGenerator:
     def generateQuantumCircuit(self):
         qCirc = QuantumCircuit(self.qubitCount)
         for pos in range(self.qubitCount):
-            theta = self.gVal2Theta(self.thetaColorArray[pos])
-            qCirc.ry(theta,pos)
+            qCirc.ry(self.thetaColorArray[pos],pos)
         self.qCircuit = qCirc
 
     def gVal2Theta(self, gValue):
         return (gValue/255)*pi
     
-    def generateEncryptionGate(self):
+    def applyEncryptionGate(self):
         self.encryptionCircuit = QuantumCircuit(len(self.encryptionKey))
         for index in range(len(self.encryptionKey)):
             match self.encryptionKey[index]:
@@ -60,12 +58,37 @@ class QuantumCircuitGenerator:
         self.encryptionCircuit = self.encryptionCircuit.to_gate()
         self.qCircuit.append(self.encryptionCircuit,range(len(self.encryptionKey)))
     
-    def infoChamp(self):
-        op = qi.Operator(self.encryptionCircuit)
-        print(op)
+    def runCircuit(self):
+        shotCount = 10000
+        newSim = BraketLocalBackend()
+        task = newSim.run(self.qCircuit,shots=shotCount)
+        results = task.result()
+        self.recentCounts = results.get_counts()
+        self.recentData = results.data()
+        self.recentFrequency = self.recentData["counts"]
+        invPx = [0 for x in range(self.qubitCount)]
+        for result, count in self.recentFrequency.items():
+            for index in range(self.qubitCount):
+                invPx[index] += int(result[index])*count
+        invPx = [x/shotCount for x in invPx]
+        invPx.reverse()
+        self.recentgValues = [self.dec2gVal(self.prob2Theta(x)) for x in invPx]
+
+
+    def prob2Theta(self, pValue):
+        root = sqrt(pValue)
+        thetaPi = 2*(np.arcsin(root))
+        theta = thetaPi/pi
+        return theta
+
+    def dec2gVal(self, decVal):
+        return int(decVal*255)
+    
 
 #~~~~~
-c = QuantumCircuitGenerator(["#000000" for x in range(25)], [random.choice(["X","Y","Z","H","S","C"]) for x in range(25)])
+c = QuantumCircuitGenerator(["#a0a0a0" for x in range(25)], [random.choice(["X","Y","Z","H","S","C"]) for x in range(25)])
 c.generateQuantumCircuit()
-c.generateEncryptionGate()
-c.qCircuit.draw()
+c.applyEncryptionGate()
+c.applyEncryptionGate()
+c.runCircuit()
+print(c.recentgValues)
